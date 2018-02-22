@@ -1,7 +1,10 @@
 [package]
 name = "elevate"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Starz0r <starz0rdesign@gmail.com>"]
 
 [dependencies]
-winapi = { version = "0.3.4" }
+winapi = { version = "0.3.4", features = ["winnt", "minwindef", "winbase", "processthreadsapi"] }
+
+[patch.crates-io]
+winapi = { path = "E:/temp/Projects/Unfinished/winapi-rs" }

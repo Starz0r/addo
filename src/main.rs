@@ -1,7 +1,18 @@
+extern crate winapi;
+
 use std::env;
+use std::mem;
 use std::process::Command;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fs::{metadata};
+use std::ptr::null_mut;
+use std::str;
+use std::ffi::OsString;
+
+use winapi::um::winnt::{WCHAR, LPWSTR};
+use winapi::shared::minwindef::{DWORD, LPDWORD};
+use winapi::um::processthreadsapi;
+use winapi::um::winbase;
 
 fn main()
 {
@@ -18,52 +29,34 @@ fn main()
         .expect("failed to execute proccess");*/
 
     println!("Found in path: {:?}", find_in_path(argv[1].clone()));
+
+    //processthreadsapi::CreateProcessWithLogonW(null_mut(),)
+    unsafe
+    {
+        // Get Currently Logged User
+        //let mut buf: [WCHAR; 128] = mem::zeroed();
+        let mut buf = vec![0u16; 128];
+        let mut size = buf.len() as DWORD;
+        winbase::GetUserNameW(buf.as_mut_ptr(), &mut size);
+
+        // Resize array to get rid of empty entries
+        buf.set_len(size as usize);
+
+        let user = String::from_utf16_lossy(&buf);
+        println!("Username: {:?}", &user);
+        println!("Size: {:?}", &size);
+    }
 }
 
-fn elevate()
-{
-    //TODO: Add a pattern match here
-    let exec = std::env::current_exe().unwrap();
-}
 
-fn find_in_path(targ: String) -> Result<String, &'static str>
-{
-    if (Path::new(&targ).is_absolute() == true)
-    {
-        let result: Result<String, &'static str> = Ok(targ);
-        return result
-    }
-
-    match env::var_os("PATH")
-    {
-        Some(paths) =>
-        {
-            for path in env::split_paths(&paths)
-            {
-                // Check if the file just exists in path
-                let mut abspath = Path::new(&path).join(&targ);
-                let mut meta = metadata(&abspath);
-                println!("Absolute Path: {:?}", abspath);
-
-                match meta
-                {
-                    Ok(m) =>
-                        if (m.is_file() == true)
-                        {
-                            let result: Result<String, &'static str> = Ok(abspath.to_string_lossy().into_owned());
-                            return result
-                        },
-                    _ => {}
-                }
-            }
-
-            return Err("Command not found in path")
-        }
-
-        None =>
-        {
-            let result: Result<String, &'static str> = Err("No Path Set?");
-            return result
+fn find_in_path<P: AsRef<Path>>(name: P) -> Option<PathBuf> {
+    let paths = env::var_os("PATH")?;
+    for mut file in env::split_paths(&paths) {
+        file.push(&name);
+        file.set_extension("exe");
+        if file.is_file() {
+            return Some(file);
         }
     }
+    None
 }
