@@ -1,13 +1,7 @@
 extern crate winapi;
 
 use std::env;
-use std::mem;
-use std::process::Command;
 use std::path::{Path, PathBuf};
-use std::fs::{metadata};
-use std::ptr::null_mut;
-use std::str;
-use std::ffi::OsString;
 
 use winapi::um::winnt::{WCHAR, LPWSTR};
 use winapi::shared::minwindef::{DWORD, LPDWORD};
@@ -32,20 +26,20 @@ fn main()
 
     //processthreadsapi::CreateProcessWithLogonW(null_mut(),)
     unsafe
-    {
-        // Get Currently Logged User
-        //let mut buf: [WCHAR; 128] = mem::zeroed();
-        let mut buf = vec![0u16; 128];
-        let mut size = buf.len() as DWORD;
-        winbase::GetUserNameW(buf.as_mut_ptr(), &mut size);
+        {
+            // Get Currently Logged User
+            //let mut buf: [WCHAR; 128] = mem::zeroed();
+            let mut buf = vec![0u16; 128];
+            let mut size = buf.len() as DWORD;
+            winbase::GetUserNameW(buf.as_mut_ptr(), &mut size);
 
-        // Resize array to get rid of empty entries
-        buf.set_len(size as usize);
+            // Resize array to get rid of empty entries
+            buf.set_len(size as usize);
 
-        let user = String::from_utf16_lossy(&buf);
-        println!("Username: {:?}", &user);
-        println!("Size: {:?}", &size);
-    }
+            let user = String::from_utf16_lossy(&buf);
+            println!("Username: {:?}", &user);
+            println!("Size: {:?}", &size);
+        }
 }
 
 
