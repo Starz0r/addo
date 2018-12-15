@@ -1,10 +1,10 @@
 [package]
 name = "elevate"
-version = "0.8.0"
-authors = ["Starz0r <starz0rdesign@gmail.com>"]
+version = "0.8.1"
+authors = ["Starz0r <starz0r@starz0r.com>"]
 
 [dependencies]
-winapi = { version = "0.3.4", features = ["winnt", "minwindef", "winbase", "processthreadsapi", "processenv", "errhandlingapi", "shellapi", "winuser", "synchapi"] }
+winapi = { version = "0.3.4", features = ["winbase", "shellapi", "winuser", "synchapi"] }
 winutil = "0.1.1"
 named_pipe = "0.2.4"
 
