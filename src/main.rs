@@ -1,79 +1,88 @@
-extern crate named_pipe;
 extern crate winapi;
-extern crate winutil;
 
+use std::ptr;
+use std::process;
 use std::env;
 use std::ffi::OsStr;
-use std::io;
-use std::iter::once;
-use std::mem::size_of_val;
 use std::os::windows::ffi::OsStrExt;
-use std::process;
-use std::ptr;
-use std::thread;
+use std::mem::size_of_val;
 
-use winapi::um::shellapi;
-use winapi::um::synchapi;
-use winapi::um::winbase;
-use winapi::um::winuser;
+use winapi::shared::minwindef::*;
+use winapi::um::shellapi::{SHELLEXECUTEINFOW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, ShellExecuteExW};
+use winapi::um::winbase::{INFINITE};
+use winapi::um::synchapi::{WaitForSingleObject};
+use winapi::um::wincon::{AttachConsole, FreeConsole};
+use winapi::um::securitybaseapi::{AllocateAndInitializeSid, CheckTokenMembership, FreeSid};
+use winapi::um::processthreadsapi::{GetCurrentProcessId};
+use winapi::um::winnt::{PSID, SECURITY_NT_AUTHORITY, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, SID_IDENTIFIER_AUTHORITY};
+use winapi::um::winuser::{SW_HIDE};
 
 fn main() {
-    //TODO: Check if the length of the Vector is 0
     let argv: Vec<String> = env::args().collect();
 
-    // Check if we are the client or server
-    if argv[1] != "client_mode" {
-        // If we are the server, start up a Named Pipe
-        let pipe_dir = format!("\\\\.\\\\pipe\\elevate\\{}", process::id());
-        let clone_dir = pipe_dir.clone();
-        thread::spawn(move || wait_for_connection_and_relay(clone_dir));
+    if (argv.len() == 0) {
+        println!("elevate: no arguments passed");
+        process::exit(1);
+    }
 
+    if argv[1] == "--internal-server-mode" {
         unsafe {
-            // Get Working Directory
-            //TODO: Handle fail cases (https://doc.rust-lang.org/1.16.0/std/env/fn.current_dir.html)
-            let wd = env::current_dir().unwrap();
-
-            // Execute Process
-            let fork_args = vec!["client_mode", &pipe_dir, &argv[1..].join(" ")].join(" ");
-            let fork = &argv[0];
-            shell_execute_and_wait(
-                "runas".to_string(),
-                fork.to_string(),
-                fork_args,
-                wd.to_str().unwrap().to_string(),
-                winuser::SW_HIDE,
-            )
-            .unwrap();
+            process::exit(elevate(argv[2].parse().unwrap(), &argv[3], argv[4..].to_vec()));
         }
-    } else {
-        // If we are the client, connect to the server, and begin piping i/o
-        //TODO: Pattern match the Result instead of unwrapping it.
-        let mut conn = named_pipe::PipeClient::connect(&argv[2]).unwrap();
+    }
 
-        // Execute the process command
-        let mut cmd = process::Command::new(&argv[3])
-            .args(&argv[4..])
-            .stdout(process::Stdio::piped())
+    unsafe {
+        if (!is_admin()) {
+            println!("elevate: you must be an administrator to run elevate");
+            process::exit(1);
+        }
+
+        //TODO: Handle fail cases (https://doc.rust-lang.org/1.16.0/std/env/fn.current_dir.html)
+        let wd = env::current_dir().unwrap();
+        let pid = GetCurrentProcessId().to_string();
+        let fork_args = vec!["--internal-server-mode", &pid, wd.to_str().unwrap(), &argv[1..].join(" ")].join(" ");
+
+        shell_execute_and_wait("runas".to_string(), argv[0].to_string(), fork_args, wd.to_str().unwrap().to_string(), SW_HIDE).unwrap();
+        /*let mut cmd = process::Command::new("runas")
+            .args(&["powershell"])
             .spawn()
-            .expect("Could not find, or insufficient access rights to executable.");
-        let mut cmd_out = cmd.stdout.take().unwrap();
+            .expect("elevate: insufficient access rights");*/
 
-        // Spawn a new thread to handle sending data through the pipe
-        thread::spawn(move || relay_stdin_to_out(&mut conn, &mut cmd_out));
+        //FreeConsole(); // TODO: catch this
+        //AttachConsole();
 
-        // Wait for it to finish before exiting
-        //TODO: Use this exit code
-        cmd.wait().unwrap();
     }
 }
 
-unsafe fn shell_execute_and_wait(
-    lp_operation: String,
-    lp_file: String,
-    lp_parameters: String,
-    lp_directory: String,
-    n_show_cmd: i32,
-) -> Result<u32, &'static str> {
+
+unsafe fn is_admin() -> bool {
+    // https://docs.microsoft.com/en-us/windows/desktop/api/securitybaseapi/nf-securitybaseapi-checktokenmembership
+    let mut b: BOOL;
+    let mut nt_authority = SID_IDENTIFIER_AUTHORITY{Value: SECURITY_NT_AUTHORITY};
+    let mut admin: PSID = ptr::null_mut();
+    b = AllocateAndInitializeSid(&mut nt_authority,
+    2,
+    SECURITY_BUILTIN_DOMAIN_RID,
+    DOMAIN_ALIAS_RID_ADMINS,
+    0, 0, 0, 0, 0, 0,
+    &mut admin);
+
+    // TODO: Fix this with yields
+    if (b != 0) {
+        if CheckTokenMembership(ptr::null_mut(), admin, &mut b) == 0 {
+            b = FALSE;
+        } else {
+            b = TRUE;
+        }
+        FreeSid(admin);
+    }
+
+    b != 0
+}
+
+unsafe fn shell_execute_and_wait(lp_operation: String, lp_file: String, lp_parameters: String, lp_directory: String, n_show_cmd: i32,) -> Result<u32, &'static str> {
+    use winapi::_core::iter::once;
+
     // Encode the arguments correctly as Wide or UTF-16-CS
     let operation_wide: Vec<u16> = OsStr::new(&lp_operation)
         .encode_wide()
@@ -93,9 +102,9 @@ unsafe fn shell_execute_and_wait(
     let file_wide: Vec<u16> = OsStr::new(&lp_file).encode_wide().chain(once(0)).collect();
 
     // Define ShellExecuteInfoW
-    let mut info = shellapi::SHELLEXECUTEINFOW {
+    let mut info = SHELLEXECUTEINFOW {
         cbSize: 0,
-        fMask: shellapi::SEE_MASK_NOASYNC | shellapi::SEE_MASK_NOCLOSEPROCESS,
+        fMask: SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS,
         hwnd: ptr::null_mut(),
         lpVerb: operation_wide.as_ptr(),
         lpFile: file_wide.as_ptr(),
@@ -113,36 +122,27 @@ unsafe fn shell_execute_and_wait(
     info.cbSize = size_of_val(&info) as u32;
 
     // Carry out the task and wait
-    let task_completed = shellapi::ShellExecuteExW(&mut info);
-    if (task_completed == 1) && (info.fMask & shellapi::SEE_MASK_NOCLOSEPROCESS != 0) {
+    let task_completed = ShellExecuteExW(&mut info);
+    if (task_completed == 1) && (info.fMask & SEE_MASK_NOCLOSEPROCESS != 0) {
         //TODO: Match statement here so we can actually return a error if it fails
-        synchapi::WaitForSingleObject(info.hProcess, winbase::INFINITE);
+        WaitForSingleObject(info.hProcess, INFINITE);
     }
 
     // Return the result
     return Ok(0);
 }
 
-fn relay_stdin_to_out(
-    mut conn: &mut named_pipe::PipeClient,
-    mut cmd_out: &mut process::ChildStdout,
-) {
-    'relay: loop {
-        io::copy(&mut cmd_out, &mut conn).unwrap();
-    }
-}
+unsafe fn elevate(parent: u32, directory: &str, args: Vec<String>) -> i32 {
+    FreeConsole(); // TODO: catch this
+    AttachConsole(parent);
 
-fn wait_for_connection_and_relay(pipe_dir: String) {
-    //TODO: Handle all the monads leading up to PipeServer
-    let mut pipe = named_pipe::PipeOptions::new(&pipe_dir)
-        .single()
-        .unwrap()
-        .wait()
-        .unwrap();
+    let cmd = process::Command::new(&args[0])
+        .current_dir(directory)
+        .args(&args[1..])
+        .stdin(process::Stdio::inherit())
+        .stdout(process::Stdio::inherit())
+        .stderr(process::Stdio::inherit())
+        .output();
 
-    let mut stdout = io::stdout();
-
-    'relay: loop {
-        io::copy(&mut pipe, &mut stdout).unwrap();
-    }
+    cmd.unwrap().status.code().unwrap()
 }
