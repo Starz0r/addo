@@ -20,7 +20,7 @@ use winapi::um::winuser::{SW_HIDE};
 fn main() {
     let argv: Vec<String> = env::args().collect();
 
-    if (argv.len() == 0) {
+    if (argv.len() == 1) {
         println!("elevate: no arguments passed");
         process::exit(1);
     }
