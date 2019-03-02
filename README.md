@@ -1,7 +1,7 @@
 # elevate
 A sudo command for Windows
 
-![](https://img.shields.io/github/license/:Starz0r/:elevate.svg?style=flat-square)
+![](https://img.shields.io/github/license/Starz0r/elevate.svg?style=flat-square)
 
 ## Roadmap for 1.0
 1. Colored VT Output for Windows 10, Redstone 4 and above.
