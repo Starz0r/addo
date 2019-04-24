@@ -1,71 +1,100 @@
 extern crate winapi;
 
-use std::ptr;
-use std::process;
 use std::env;
 use std::ffi::OsStr;
-use std::os::windows::ffi::OsStrExt;
 use std::mem::size_of_val;
+use std::os::windows::ffi::OsStrExt;
+use std::process;
+use std::ptr;
 
 use winapi::shared::minwindef::*;
-use winapi::um::shellapi::{SHELLEXECUTEINFOW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, ShellExecuteExW};
-use winapi::um::winbase::{INFINITE};
-use winapi::um::synchapi::{WaitForSingleObject};
-use winapi::um::wincon::{AttachConsole, FreeConsole};
+use winapi::um::processthreadsapi::GetCurrentProcessId;
 use winapi::um::securitybaseapi::{AllocateAndInitializeSid, CheckTokenMembership, FreeSid};
-use winapi::um::processthreadsapi::{GetCurrentProcessId};
-use winapi::um::winnt::{PSID, SECURITY_NT_AUTHORITY, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, SID_IDENTIFIER_AUTHORITY};
-use winapi::um::winuser::{SW_HIDE};
+use winapi::um::shellapi::{
+    ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+};
+use winapi::um::synchapi::WaitForSingleObject;
+use winapi::um::winbase::INFINITE;
+use winapi::um::wincon::{AttachConsole, FreeConsole};
+use winapi::um::winnt::{
+    DOMAIN_ALIAS_RID_ADMINS, PSID, SECURITY_BUILTIN_DOMAIN_RID, SECURITY_NT_AUTHORITY,
+    SID_IDENTIFIER_AUTHORITY,
+};
+use winapi::um::winuser::SW_HIDE;
 
 fn main() {
     let argv: Vec<String> = env::args().collect();
 
     if (argv.len() == 1) {
-        println!("elevate: no arguments passed");
+        println!("addo: no arguments passed");
         process::exit(1);
     }
 
     if argv[1] == "--internal-server-mode" {
         unsafe {
-            process::exit(elevate(argv[2].parse().unwrap(), &argv[3], argv[4..].to_vec()));
+            process::exit(elevate(
+                argv[2].parse().unwrap(),
+                &argv[3],
+                argv[4..].to_vec(),
+            ));
         }
     }
 
     unsafe {
         if (!is_admin()) {
-            println!("elevate: you must be an administrator to run elevate");
+            println!("addo: you must be an administrator to run addo");
             process::exit(1);
         }
 
         //TODO: Handle fail cases (https://doc.rust-lang.org/1.16.0/std/env/fn.current_dir.html)
         let wd = env::current_dir().unwrap();
         let pid = GetCurrentProcessId().to_string();
-        let fork_args = vec!["--internal-server-mode", &pid, wd.to_str().unwrap(), &argv[1..].join(" ")].join(" ");
+        let fork_args = vec![
+            "--internal-server-mode",
+            &pid,
+            wd.to_str().unwrap(),
+            &argv[1..].join(" "),
+        ]
+        .join(" ");
 
-        shell_execute_and_wait("runas".to_string(), argv[0].to_string(), fork_args, wd.to_str().unwrap().to_string(), SW_HIDE).unwrap();
+        shell_execute_and_wait(
+            "runas".to_string(),
+            argv[0].to_string(),
+            fork_args,
+            wd.to_str().unwrap().to_string(),
+            SW_HIDE,
+        )
+        .unwrap();
         /*let mut cmd = process::Command::new("runas")
-            .args(&["powershell"])
-            .spawn()
-            .expect("elevate: insufficient access rights");*/
+        .args(&["powershell"])
+        .spawn()
+        .expect("elevate: insufficient access rights");*/
 
         //FreeConsole(); // TODO: catch this
         //AttachConsole();
-
     }
 }
-
 
 unsafe fn is_admin() -> bool {
     // https://docs.microsoft.com/en-us/windows/desktop/api/securitybaseapi/nf-securitybaseapi-checktokenmembership
     let mut b: BOOL;
-    let mut nt_authority = SID_IDENTIFIER_AUTHORITY{Value: SECURITY_NT_AUTHORITY};
+    let mut nt_authority = SID_IDENTIFIER_AUTHORITY {
+        Value: SECURITY_NT_AUTHORITY,
+    };
     let mut admin: PSID = ptr::null_mut();
-    b = AllocateAndInitializeSid(&mut nt_authority,
-    2,
-    SECURITY_BUILTIN_DOMAIN_RID,
-    DOMAIN_ALIAS_RID_ADMINS,
-    0, 0, 0, 0, 0, 0,
-    &mut admin);
+    b = AllocateAndInitializeSid(
+        &mut nt_authority,
+        2,
+        SECURITY_BUILTIN_DOMAIN_RID,
+        DOMAIN_ALIAS_RID_ADMINS,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        &mut admin,
+    );
 
     // TODO: Fix this with yields
     if (b != 0) {
@@ -80,7 +109,13 @@ unsafe fn is_admin() -> bool {
     b != 0
 }
 
-unsafe fn shell_execute_and_wait(lp_operation: String, lp_file: String, lp_parameters: String, lp_directory: String, n_show_cmd: i32,) -> Result<u32, &'static str> {
+unsafe fn shell_execute_and_wait(
+    lp_operation: String,
+    lp_file: String,
+    lp_parameters: String,
+    lp_directory: String,
+    n_show_cmd: i32,
+) -> Result<u32, &'static str> {
     use winapi::_core::iter::once;
 
     // Encode the arguments correctly as Wide or UTF-16-CS
