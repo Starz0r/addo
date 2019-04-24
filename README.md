@@ -1,5 +1,4 @@
 # addo
-A sudo command for Windows Administrators.
 
 ![](https://img.shields.io/github/license/Starz0r/addo.svg?style=flat-square)
 
