@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>addo</id>
+    <version>0.9.0</version>
+    <title>addo</title>
+    <authors>Starz0r</authors>
+    <owners>Starz0r</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <licenseUrl>https://raw.githubusercontent.com/Starz0r/addo/master/LICENSE</licenseUrl>
+	<projectSourceUrl>https://github.com/Starz0r/addo</projectSourceUrl>
+	<packageSourceUrl>https://github.com/Starz0r/addo</packageSourceUrl>
+    <description>![](https://img.shields.io/github/license/Starz0r/addo.svg?style=flat-square)</description>
+    <summary>A sudo command for Windows Administrators.</summary>
+    <releaseNotes>https://github.com/jwilm/alacritty/releases</releaseNotes>
+    <dependencies>
+        <dependency id="vcredist140" version="14.20.27508.1" />
+    </dependencies>
+    <copyright>Copyright (C) 2019 Starz0r</copyright>
+    <tags>foss development cli shell bash powershell cmd posix unix linux gnu cygwin msys msys2 mingw graphical console terminal admin</tags>
+  </metadata>
+</package>
